@@ -1,0 +1,9 @@
+pymupdf
+numpy
+opencv-python-headless
+easyocr
+transformers
+torch
+flask
+flask-cors
+gunicorn
