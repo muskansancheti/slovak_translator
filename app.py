@@ -45,6 +45,30 @@ DEFAULT_CUSTOM_TRANSLATIONS = {
     "meradlo priem. ob. dr.": "measuring gauge prim.ob.dr.",
     "odchylkomer": "deviation gauge",
     "posuvné meradlo": "sliding gauge",
+    "PRAŤ PODĽA": "WASH ACCORDING TO",
+    "SC- ŠPECIÁLNE CHARAKTERISTIKY PROCESU": "SC- SPECIAL PROCESS CHARACTERISTICS",
+    "PRACOVAŤ V RUKAVICIACH": "WORK WITH GLOVES",
+    "Brúsiť povrch na hotovo": "Grind surface to finish",
+    "Brúsiť OD na hotovo": "Grind OD to finish",
+    "Superfinišovať OD na hotovo": "Superfinish OD to finish",
+    "Rozmerať hriadele": "Measure shafts",
+    "Prať v ultrazvuk .Práčke": "Wash in ultrasonic washer",
+    "stojan mikrometra": "micrometer stand",
+    "Strmeňový mikrometer": "micrometer",
+    "univerzál.merací stojan": "universal measuring stand",
+    "brúsna lišta": "grinding bar",
+    "Stredisko": "Center",
+    "Pracovisko": "Workplace",
+    "Indukčne kaliť": "Inductively harden",
+    "Prietokomer": "Flow meter",
+    "Tvrdomer": "Hardness tester",
+    "Mikrotvrdomer": "Microhardness tester",
+    "Teplomer": "Thermometer",
+    "Stopky": "Stopwatch",
+    "Refraktometer": "Refractometer",
+    "Voltmeter": "Voltmeter",
+    "Priehyb": "Deflection",
+    "prizma": "Prism",
 }
 
 def load_custom_translations():
@@ -161,7 +185,7 @@ def process_industrial_pdf(input_path, output_path, progress_callback=None):
         page = doc[page_num]
         processed_rects = []
 
-        # Native Text
+        # ── 1. NATIVE TEXT ──────────────────────────────────────────
         blocks = page.get_text("dict", flags=fitz.TEXT_DEHYPHENATE)["blocks"]
         for b in blocks:
             if "lines" not in b:
@@ -182,44 +206,43 @@ def process_industrial_pdf(input_path, output_path, progress_callback=None):
 
                     page.draw_rect(bbox, color=(1,1,1), fill=(1,1,1), overlay=True)
                     font_size = fit_font_size(bbox, translated)
-
                     page.insert_htmlbox(
                         bbox,
                         f'<p style="font-family:helv; font-size:{font_size}px; margin:0; line-height:1.08; text-align:center;">{translated}</p>'
                     )
                     processed_rects.append(bbox)
 
-        # Enhanced OCR
-        pix = page.get_pixmap(matrix=fitz.Matrix(2.0, 2.0))
+        # ── 2. OCR (for vector/image text not caught natively) ──────
+        pix = page.get_pixmap(matrix=fitz.Matrix(3.0, 3.0))
         img_np = np.frombuffer(pix.samples, dtype=np.uint8).reshape((pix.height, pix.width, -1))
         if img_np.shape[2] == 4:
             img_np = img_np[:, :, :3]
 
-        enhanced_img = enhance_for_ocr(img_np)
-
         ocr_results = reader.readtext(
-            enhanced_img, 
-            paragraph=False, 
+            img_np,
+            paragraph=False,
             detail=1,
-            width_ths=0.9,      # was 0.7
-            height_ths=0.9,     # was 0.8
-            text_threshold=0.3, # was 0.4 — lower = more detections
-            low_text=0.3,       # add this — catches large text regions
-            link_threshold=0.4, # add this
-            canvas_size=2560,   # add this — handles large text
-            mag_ratio=1.5       # add this — magnifies for better detection
+            width_ths=0.9,
+            height_ths=0.9,
+            text_threshold=0.25,
+            low_text=0.25,
+            link_threshold=0.3,
+            canvas_size=3200,
+            mag_ratio=2.0
         )
 
+        scale = 3.0
+
         for (bbox_coords, word, prob) in ocr_results:
-            if prob < 0.35:
+            if prob < 0.25:
                 continue
             word = re.sub(r'\s+', ' ', word.strip())
             if len(word) < 3:
                 continue
 
             ocr_rect = fitz.Rect(
-                bbox_coords[0][0]/2, bbox_coords[0][1]/2,
-                bbox_coords[2][0]/2, bbox_coords[2][1]/2
+                bbox_coords[0][0]/scale, bbox_coords[0][1]/scale,
+                bbox_coords[2][0]/scale, bbox_coords[2][1]/scale
             )
 
             if any(r.intersects(ocr_rect) for r in processed_rects):
@@ -229,15 +252,16 @@ def process_industrial_pdf(input_path, output_path, progress_callback=None):
             if translated == word:
                 continue
 
+            print(f"[OCR→PDF] '{word}' → '{translated}' at {ocr_rect}")
             page.draw_rect(ocr_rect, color=(1,1,1), fill=(1,1,1), overlay=True)
             font_size = fit_font_size(ocr_rect, translated)
-
             page.insert_htmlbox(
                 ocr_rect,
                 f'<p style="font-family:helv; font-size:{font_size}px; margin:0; text-align:center; font-weight:bold;">{translated}</p>'
             )
             processed_rects.append(ocr_rect)
 
+    # ── 3. SAVE ─────────────────────────────────────────────────────
     doc.save(output_path, garbage=4, deflate=True, clean=True)
     doc.close()
     print(f"✅ Done! Saved as: {output_path}")
