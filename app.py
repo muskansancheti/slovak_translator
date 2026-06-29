@@ -197,8 +197,18 @@ def process_industrial_pdf(input_path, output_path, progress_callback=None):
 
         enhanced_img = enhance_for_ocr(img_np)
 
-        ocr_results = reader.readtext(enhanced_img, paragraph=False, detail=1, 
-                                      width_ths=0.7, height_ths=0.8, text_threshold=0.4)
+        ocr_results = reader.readtext(
+            enhanced_img, 
+            paragraph=False, 
+            detail=1,
+            width_ths=0.9,      # was 0.7
+            height_ths=0.9,     # was 0.8
+            text_threshold=0.3, # was 0.4 — lower = more detections
+            low_text=0.3,       # add this — catches large text regions
+            link_threshold=0.4, # add this
+            canvas_size=2560,   # add this — handles large text
+            mag_ratio=1.5       # add this — magnifies for better detection
+        )
 
         for (bbox_coords, word, prob) in ocr_results:
             if prob < 0.35:
