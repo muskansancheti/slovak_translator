@@ -95,13 +95,12 @@ def translate_text(text: str) -> str:
     for sk, en in CUSTOM_TRANSLATIONS.items():
         if sk.lower() in lower_text:
             result = re.sub(re.escape(sk), en, text_stripped, flags=re.IGNORECASE)
+            print(f"[DICT] '{text_stripped}' → '{result}'")
             return result.upper() if text.isupper() else result
 
     if TECH_PATTERN.match(text_stripped):
+        print(f"[TECH] Skipping: '{text_stripped}'")
         return text
-
-    if text_stripped in translation_cache:
-        return translation_cache[text_stripped]
 
     # M2M100 Translation
     try:
@@ -113,10 +112,11 @@ def translate_text(text: str) -> str:
             max_length=256
         )
         translated = tokenizer.decode(generated[0], skip_special_tokens=True)
+        print(f"[M2M] '{text_stripped}' → '{translated}'")
         translation_cache[text_stripped] = translated
         return translated
-    except:
-        translation_cache[text_stripped] = text_stripped
+    except Exception as e:
+        print(f"[ERROR] Translation failed for '{text_stripped}': {e}")
         return text_stripped
 
 
@@ -147,6 +147,7 @@ def enhance_for_ocr(image_np):
 # MAIN PDF PROCESSING
 # ==========================================
 def process_industrial_pdf(input_path, output_path, progress_callback=None):
+    print(f"[START] Processing: {input_path}")
     global CUSTOM_TRANSLATIONS
     CUSTOM_TRANSLATIONS = load_custom_translations()
 
